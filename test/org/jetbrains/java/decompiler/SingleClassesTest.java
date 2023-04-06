@@ -27,6 +27,7 @@ public class SingleClassesTest extends SingleClassesTestBase {
     return new HashMap<String, Object>() {{
       put(IFernflowerPreferences.BYTECODE_SOURCE_MAPPING, "1");
       put(IFernflowerPreferences.DUMP_ORIGINAL_LINES, "1");
+      put(IFernflowerPreferences.IGNORE_INVALID_BYTECODE, "1");
     }};
   }
 

@@ -28,19 +28,19 @@ public class FastExtendedPostdominanceHelper {
 
   private List<Statement> lstReversePostOrderList;
 
-  private HashMap<Integer, FastFixedSet<Integer>> mapSupportPoints = new HashMap<Integer, FastFixedSet<Integer>>();
+  private HashMap<Integer, FastFixedSet<Integer>> mapSupportPoints = new LinkedHashMap<Integer, FastFixedSet<Integer>>();
 
-  private final HashMap<Integer, FastFixedSet<Integer>> mapExtPostdominators = new HashMap<Integer, FastFixedSet<Integer>>();
+  private final HashMap<Integer, FastFixedSet<Integer>> mapExtPostdominators = new LinkedHashMap<Integer, FastFixedSet<Integer>>();
 
   private Statement statement;
 
   private FastFixedSetFactory<Integer> factory;
 
-  public HashMap<Integer, Set<Integer>> getExtendedPostdominators(Statement statement) {
+  public HashMap<Integer, LinkedHashSet<Integer>> getExtendedPostdominators(Statement statement) {
 
     this.statement = statement;
 
-    HashSet<Integer> set = new HashSet<Integer>();
+    HashSet<Integer> set = new LinkedHashSet<Integer>();
     for (Statement st : statement.getStats()) {
       set.add(st.id);
     }
@@ -65,9 +65,11 @@ public class FastExtendedPostdominanceHelper {
 
     filterOnDominance(filter);
 
-    HashMap<Integer, Set<Integer>> res = new HashMap<Integer, Set<Integer>>();
+    HashMap<Integer, LinkedHashSet<Integer>> res = new HashMap<Integer, LinkedHashSet<Integer>>();
     for (Entry<Integer, FastFixedSet<Integer>> entry : mapExtPostdominators.entrySet()) {
-      res.put(entry.getKey(), entry.getValue().toPlainSet());
+      List<Integer> lst = new ArrayList<>(entry.getValue().toPlainSet());
+      Collections.sort(lst);
+      res.put(entry.getKey(), new LinkedHashSet<>(lst));
     }
 
     return res;
@@ -91,7 +93,7 @@ public class FastExtendedPostdominanceHelper {
       Set<Statement> setVisited = new HashSet<Statement>();
 
       setVisited.add(stack.getFirst());
-      
+
       while (!stack.isEmpty()) {
 
         Statement stat = stack.removeFirst();
@@ -109,17 +111,17 @@ public class FastExtendedPostdominanceHelper {
           setPostdoms.complement(path);
           continue;
         }
-        
+
         for (StatEdge edge : stat.getSuccessorEdges(StatEdge.TYPE_REGULAR)) {
-          
+
           Statement edge_destination = edge.getDestination();
-          
+
           if(!setVisited.contains(edge_destination)) {
-            
+
             stack.add(edge_destination);
             stackPath.add(path.getCopy());
-            
-            setVisited.add(edge_destination); 
+
+            setVisited.add(edge_destination);
           }
         }
       }

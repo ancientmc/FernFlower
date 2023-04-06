@@ -15,12 +15,14 @@
  */
 package org.jetbrains.java.decompiler.struct.attr;
 
+import org.jetbrains.java.decompiler.modules.decompiler.vars.LVTVariable;
+import org.jetbrains.java.decompiler.modules.decompiler.vars.LocalVariableTable;
 import org.jetbrains.java.decompiler.struct.consts.ConstantPool;
 import org.jetbrains.java.decompiler.util.DataInputFullStream;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /*
@@ -35,33 +37,44 @@ import java.util.Map;
 */
 public class StructLocalVariableTableAttribute extends StructGeneralAttribute {
 
-  private Map<Integer, String> mapVarNames = Collections.emptyMap();
+  private Map<Integer, List<LVTVariable>> EMPTY_LVT = Collections.emptyMap();
+  private LocalVariableTable lvt;
 
   @Override
   public void initContent(ConstantPool pool) throws IOException {
     DataInputFullStream data = stream();
 
     int len = data.readUnsignedShort();
+    boolean isLVTT = this.getName().equals(ATTRIBUTE_LOCAL_VARIABLE_TYPE_TABLE);
     if (len > 0) {
-      mapVarNames = new HashMap<Integer, String>(len);
+      lvt = new LocalVariableTable(len);
       for (int i = 0; i < len; i++) {
-        data.discard(4);
+        int start = data.readUnsignedShort();
+        int vlen = data.readUnsignedShort();
         int nameIndex = data.readUnsignedShort();
-        data.discard(2);
+        int descIndex = data.readUnsignedShort(); // either descriptor or signature
         int varIndex = data.readUnsignedShort();
-        mapVarNames.put(varIndex, pool.getPrimitiveConstant(nameIndex).getString());
+        LVTVariable v = new LVTVariable(pool.getPrimitiveConstant(nameIndex).getString(), pool.getPrimitiveConstant(descIndex).getString(),start,start+vlen,varIndex,isLVTT);
+        lvt.addVariable(v);
       }
-    }
-    else {
-      mapVarNames = Collections.emptyMap();
     }
   }
 
   public void addLocalVariableTable(StructLocalVariableTableAttribute attr) {
-    mapVarNames.putAll(attr.getMapVarNames());
+    if (lvt == null) {
+      lvt = attr.lvt;
+    }
+    else {
+      lvt.mergeLVTs(attr.lvt);
+      attr.lvt = lvt;
+    }
   }
 
-  public Map<Integer, String> getMapVarNames() {
-    return mapVarNames;
+  public Map<Integer, List<LVTVariable>> getMapVarNames() {
+    return lvt == null ? EMPTY_LVT : lvt.getMapVarNames();
+  }
+
+  public LocalVariableTable getLVT() {
+    return lvt;
   }
 }

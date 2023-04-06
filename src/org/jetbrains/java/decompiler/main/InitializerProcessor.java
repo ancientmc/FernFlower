@@ -25,11 +25,18 @@ import org.jetbrains.java.decompiler.modules.decompiler.stats.RootStatement;
 import org.jetbrains.java.decompiler.modules.decompiler.stats.Statement;
 import org.jetbrains.java.decompiler.modules.decompiler.vars.VarVersionPair;
 import org.jetbrains.java.decompiler.struct.StructClass;
+import org.jetbrains.java.decompiler.struct.StructContext;
 import org.jetbrains.java.decompiler.struct.StructField;
+import org.jetbrains.java.decompiler.struct.StructMethod;
+import org.jetbrains.java.decompiler.struct.gen.MethodDescriptor;
+import org.jetbrains.java.decompiler.struct.gen.VarType;
 import org.jetbrains.java.decompiler.util.InterpreterUtil;
 
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
+import java.util.Set;
 
 
 public class InitializerProcessor {
@@ -124,13 +131,13 @@ public class InitializerProcessor {
 
     RootStatement root = meth.root;
     StructClass cl = wrapper.getClassStruct();
+    Set<String> whitelist = new HashSet<String>();
 
     Statement firstdata = findFirstData(root);
     if (firstdata != null) {
-      while (!firstdata.getExprents().isEmpty()) {
-        Exprent exprent = firstdata.getExprents().get(0);
-
-        boolean found = false;
+      Iterator<Exprent> itr = firstdata.getExprents().iterator();
+      while (itr.hasNext()) {
+        Exprent exprent = itr.next();
 
         if (exprent.type == Exprent.EXPRENT_ASSIGNMENT) {
           AssignmentExprent asexpr = (AssignmentExprent)exprent;
@@ -139,21 +146,16 @@ public class InitializerProcessor {
             if (fexpr.isStatic() && fexpr.getClassname().equals(cl.qualifiedName) &&
                 cl.hasField(fexpr.getName(), fexpr.getDescriptor().descriptorString)) {
 
-              if (isExprentIndependent(asexpr.getRight(), meth)) {
-
-                String keyField = InterpreterUtil.makeUniqueKey(fexpr.getName(), fexpr.getDescriptor().descriptorString);
+              String keyField = InterpreterUtil.makeUniqueKey(fexpr.getName(), fexpr.getDescriptor().descriptorString);
+              if (isExprentIndependent(asexpr.getRight(), meth, cl, whitelist, cl.getFields().getIndexByKey(keyField))) {
                 if (!wrapper.getStaticFieldInitializers().containsKey(keyField)) {
                   wrapper.getStaticFieldInitializers().addWithKey(asexpr.getRight(), keyField);
-                  firstdata.getExprents().remove(0);
-                  found = true;
+                  whitelist.add(keyField);
+                  itr.remove();
                 }
               }
             }
           }
-        }
-
-        if (!found) {
-          break;
         }
       }
     }
@@ -191,6 +193,8 @@ public class InitializerProcessor {
       return;
     }
 
+    Set<String> whitelist = new HashSet<String>();
+
     while (true) {
 
       String fieldWithDescr = null;
@@ -216,8 +220,8 @@ public class InitializerProcessor {
                 cl.hasField(fexpr.getName(), fexpr
                   .getDescriptor().descriptorString)) { // check for the physical existence of the field. Could be defined in a superclass.
 
-              if (isExprentIndependent(asexpr.getRight(), lstMethWrappers.get(i))) {
-                String fieldKey = InterpreterUtil.makeUniqueKey(fexpr.getName(), fexpr.getDescriptor().descriptorString);
+              String fieldKey = InterpreterUtil.makeUniqueKey(fexpr.getName(), fexpr.getDescriptor().descriptorString);
+              if (isExprentIndependent(asexpr.getRight(), lstMethWrappers.get(i), cl, whitelist, cl.getFields().getIndexByKey(fieldKey))) {
                 if (fieldWithDescr == null) {
                   fieldWithDescr = fieldKey;
                   value = asexpr.getRight();
@@ -252,7 +256,7 @@ public class InitializerProcessor {
     }
   }
 
-  private static boolean isExprentIndependent(Exprent exprent, MethodWrapper meth) {
+  private static boolean isExprentIndependent(Exprent exprent, MethodWrapper meth, StructClass cl, Set<String> whitelist, int fidx) {
 
     List<Exprent> lst = exprent.getAllExprents(true);
     lst.add(exprent);
@@ -270,7 +274,17 @@ public class InitializerProcessor {
           }
           break;
         case Exprent.EXPRENT_FIELD:
-          return false;
+          FieldExprent fexpr = (FieldExprent)expr;
+          if (cl.qualifiedName.equals(fexpr.getClassname())) {
+            String key = InterpreterUtil.makeUniqueKey(fexpr.getName(), fexpr.getDescriptor().descriptorString);
+            if (!whitelist.contains(key)) {
+              return false;
+            }
+            return cl.getFields().getIndexByKey(key) < fidx;
+          }
+          else if (!fexpr.isStatic()) {
+            return false;
+          }
       }
     }
 
@@ -319,5 +333,29 @@ public class InitializerProcessor {
     }
 
     return false;
+  }
+
+
+  public static void hideInitalizers(ClassWrapper wrapper) {
+    // hide initializers with anon class arguments
+    for (MethodWrapper method : wrapper.getMethods()) {
+      StructMethod mt = method.methodStruct;
+      String name = mt.getName();
+      String desc = mt.getDescriptor();
+
+      if (mt.isSynthetic() && CodeConstants.INIT_NAME.equals(name)) {
+        MethodDescriptor md = MethodDescriptor.parseDescriptor(desc);
+        if (md.params.length > 0) {
+          VarType type = md.params[md.params.length - 1];
+          if (type.type == CodeConstants.TYPE_OBJECT) {
+            ClassNode node = DecompilerContext.getClassProcessor().getMapRootClasses().get(type.value);
+            if (node != null && (node.namelessConstructorStub || node.type == ClassNode.CLASS_ANONYMOUS || (node.access & CodeConstants.ACC_SYNTHETIC) != 0)) {
+              //TODO: Verify that the body is JUST a this([args]) call?
+              wrapper.getHiddenMembers().add(InterpreterUtil.makeUniqueKey(name, desc));
+            }
+          }
+        }
+      }
+    }
   }
 }

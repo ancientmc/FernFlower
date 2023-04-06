@@ -23,6 +23,8 @@ import org.jetbrains.java.decompiler.main.collectors.BytecodeMappingTracer;
 import org.jetbrains.java.decompiler.main.rels.MethodWrapper;
 import org.jetbrains.java.decompiler.modules.decompiler.ExprProcessor;
 import org.jetbrains.java.decompiler.modules.decompiler.vars.VarVersionPair;
+import org.jetbrains.java.decompiler.struct.StructClass;
+import org.jetbrains.java.decompiler.struct.StructField;
 import org.jetbrains.java.decompiler.struct.consts.LinkConstant;
 import org.jetbrains.java.decompiler.struct.gen.FieldDescriptor;
 import org.jetbrains.java.decompiler.struct.gen.VarType;
@@ -34,8 +36,8 @@ import org.jetbrains.java.decompiler.util.InterpreterUtil;
 import org.jetbrains.java.decompiler.util.TextUtil;
 
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.List;
-import java.util.Set;
 
 public class FieldExprent extends Exprent {
 
@@ -45,11 +47,11 @@ public class FieldExprent extends Exprent {
   private Exprent instance;
   private final FieldDescriptor descriptor;
 
-  public FieldExprent(LinkConstant cn, Exprent instance, Set<Integer> bytecodeOffsets) {
+  public FieldExprent(LinkConstant cn, Exprent instance, BitSet bytecodeOffsets) {
     this(cn.elementname, cn.classname, instance == null, instance, FieldDescriptor.parseDescriptor(cn.descriptor), bytecodeOffsets);
   }
 
-  public FieldExprent(String name, String classname, boolean isStatic, Exprent instance, FieldDescriptor descriptor, Set<Integer> bytecodeOffsets) {
+  public FieldExprent(String name, String classname, boolean isStatic, Exprent instance, FieldDescriptor descriptor, BitSet bytecodeOffsets) {
     super(EXPRENT_FIELD);
     this.name = name;
     this.classname = classname;
@@ -63,6 +65,20 @@ public class FieldExprent extends Exprent {
   @Override
   public VarType getExprType() {
     return descriptor.type;
+  }
+
+  @Override
+  public VarType getInferredExprType(VarType upperBound) {
+    StructClass cl = DecompilerContext.getStructContext().getClass(classname);
+    while(cl != null) {
+      StructField ft = cl.getField(name, descriptor.descriptorString);
+      if(ft != null && ft.getSignature() != null) {
+        return ft.getSignature().type;
+      }
+      if(cl.superClass == null) cl = null;
+      else cl = DecompilerContext.getStructContext().getClass((String)cl.superClass.value);
+    }
+    return getExprType();
   }
 
   @Override
@@ -185,31 +201,37 @@ public class FieldExprent extends Exprent {
   public String getName() {
     return name;
   }
-  
+
+  @Override
+  public void getBytecodeRange(BitSet values) {
+    measureBytecode(values, instance);
+    measureBytecode(values);
+  }
+
   // *****************************************************************************
   // IMatchable implementation
   // *****************************************************************************
-  
+
   public boolean match(MatchNode matchNode, MatchEngine engine) {
 
     if(!super.match(matchNode, engine)) {
       return false;
     }
-    
+
     RuleValue rule = matchNode.getRules().get(MatchProperties.EXPRENT_FIELD_NAME);
     if(rule != null) {
       if(rule.isVariable()) {
         if(!engine.checkAndSetVariableValue((String)rule.value, this.name)) {
           return false;
         }
-      } else { 
+      } else {
         if(!rule.value.equals(this.name)) {
           return false;
         }
       }
     }
-    
+
     return true;
   }
-  
+
 }

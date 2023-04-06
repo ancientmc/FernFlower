@@ -22,17 +22,21 @@ import org.jetbrains.java.decompiler.main.DecompilerContext;
 import org.jetbrains.java.decompiler.main.TextBuffer;
 import org.jetbrains.java.decompiler.main.collectors.BytecodeMappingTracer;
 import org.jetbrains.java.decompiler.modules.decompiler.ExprProcessor;
+import org.jetbrains.java.decompiler.modules.decompiler.vars.CheckTypesResult;
+import org.jetbrains.java.decompiler.modules.decompiler.vars.LVTVariable;
 import org.jetbrains.java.decompiler.modules.decompiler.vars.VarProcessor;
 import org.jetbrains.java.decompiler.modules.decompiler.vars.VarTypeProcessor;
 import org.jetbrains.java.decompiler.modules.decompiler.vars.VarVersionPair;
 import org.jetbrains.java.decompiler.struct.gen.VarType;
+import org.jetbrains.java.decompiler.struct.gen.generics.GenericMain;
+import org.jetbrains.java.decompiler.struct.gen.generics.GenericType;
 import org.jetbrains.java.decompiler.struct.match.MatchEngine;
 import org.jetbrains.java.decompiler.struct.match.MatchNode;
-import org.jetbrains.java.decompiler.struct.match.IMatchable.MatchProperties;
 import org.jetbrains.java.decompiler.struct.match.MatchNode.RuleValue;
 import org.jetbrains.java.decompiler.util.InterpreterUtil;
 
 import java.util.ArrayList;
+import java.util.BitSet;
 import java.util.List;
 
 public class VarExprent extends Exprent {
@@ -47,6 +51,7 @@ public class VarExprent extends Exprent {
   private int version = 0;
   private boolean classDef = false;
   private boolean stack = false;
+  private LVTVariable lvt = null;
 
   public VarExprent(int index, VarType varType, VarProcessor processor) {
     super(EXPRENT_VAR);
@@ -57,6 +62,21 @@ public class VarExprent extends Exprent {
 
   @Override
   public VarType getExprType() {
+    return getVarType();
+  }
+
+  @Override
+  public VarType getInferredExprType(VarType upperBound) {
+    if (lvt != null && lvt.getSig() != null) {
+      // TODO; figure out why it's crashing, ugly fix for now
+      try {
+        return GenericType.parse(lvt.getSig());
+      } catch (StringIndexOutOfBoundsException ex) {
+      }
+    }
+    else if (lvt != null) {
+      return lvt.getVarType();
+    }
     return getVarType();
   }
 
@@ -77,6 +97,7 @@ public class VarExprent extends Exprent {
     var.setVersion(version);
     var.setClassDef(classDef);
     var.setStack(stack);
+    var.setLVT(lvt);
     return var;
   }
 
@@ -93,7 +114,10 @@ public class VarExprent extends Exprent {
     }
     else {
       String name = null;
-      if (processor != null) {
+      if (lvt != null) {
+        name = lvt.name;
+      }
+      else if (processor != null) {
         name = processor.getVarName(new VarVersionPair(index, version));
       }
 
@@ -101,7 +125,15 @@ public class VarExprent extends Exprent {
         if (processor != null && processor.getVarFinal(new VarVersionPair(index, version)) == VarTypeProcessor.VAR_EXPLICIT_FINAL) {
           buffer.append("final ");
         }
-        buffer.append(ExprProcessor.getCastTypeName(getVarType())).append(" ");
+        if (lvt != null && lvt.getSig() != null) {
+          buffer.append(ExprProcessor.getCastTypeName(GenericType.parse(lvt.getSig()))).append(" ");
+        }
+        else if (lvt != null) {
+          buffer.append(ExprProcessor.getCastTypeName(lvt.getVarType())).append(" ");
+        }
+        else {
+          buffer.append(ExprProcessor.getCastTypeName(getVarType())).append(" ");
+        }
       }
       buffer.append(name == null ? ("var" + index + (version == 0 ? "" : "_" + version)) : name);
     }
@@ -120,6 +152,11 @@ public class VarExprent extends Exprent {
            InterpreterUtil.equalObjects(getVarType(), ve.getVarType()); // FIXME: varType comparison redundant?
   }
 
+  @Override
+  public void getBytecodeRange(BitSet values) {
+    measureBytecode(values);
+  }
+
   public int getIndex() {
     return index;
   }
@@ -130,6 +167,7 @@ public class VarExprent extends Exprent {
 
   public VarType getVarType() {
     VarType vt = null;
+
     if (processor != null) {
       vt = processor.getVarType(new VarVersionPair(index, version));
     }
@@ -184,31 +222,56 @@ public class VarExprent extends Exprent {
   public void setStack(boolean stack) {
     this.stack = stack;
   }
-  
+
   // *****************************************************************************
   // IMatchable implementation
   // *****************************************************************************
-  
+
   public boolean match(MatchNode matchNode, MatchEngine engine) {
 
     if(!super.match(matchNode, engine)) {
       return false;
     }
-    
+
     RuleValue rule = matchNode.getRules().get(MatchProperties.EXPRENT_VAR_INDEX);
     if(rule != null) {
       if(rule.isVariable()) {
         if(!engine.checkAndSetVariableValue((String)rule.value, this.index)) {
           return false;
         }
-      } else { 
+      } else {
         if(this.index != Integer.valueOf((String)rule.value).intValue()) {
           return false;
         }
       }
     }
-    
+
     return true;
   }
-  
+
+  public void setLVT(LVTVariable lvt) {
+    this.lvt = lvt;
+    if (processor != null && lvt != null) {
+      processor.setVarType(new VarVersionPair(this), lvt.getVarType());
+    }
+  }
+
+  public LVTVariable getLVT() {
+    return this.lvt;
+  }
+
+  @Override
+  public String toString() {
+    return lvt != null ? lvt.name :  "var_" + index + "_" + version;
+  }
+
+  @Override
+  public CheckTypesResult checkExprTypeBounds() {
+    CheckTypesResult checkExprTypeBounds = super.checkExprTypeBounds();
+    if (lvt != null) {
+      checkExprTypeBounds.addMinTypeExprent(this, lvt.getVarType());
+    }
+    return checkExprTypeBounds;
+  }
+
 }

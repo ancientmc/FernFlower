@@ -24,9 +24,14 @@ import org.jetbrains.java.decompiler.main.collectors.CounterContainer;
 import org.jetbrains.java.decompiler.modules.decompiler.DecHelper;
 import org.jetbrains.java.decompiler.modules.decompiler.ExprProcessor;
 import org.jetbrains.java.decompiler.modules.decompiler.StatEdge;
+import org.jetbrains.java.decompiler.modules.decompiler.exps.ArrayExprent;
 import org.jetbrains.java.decompiler.modules.decompiler.exps.ConstExprent;
 import org.jetbrains.java.decompiler.modules.decompiler.exps.Exprent;
+import org.jetbrains.java.decompiler.modules.decompiler.exps.FieldExprent;
+import org.jetbrains.java.decompiler.modules.decompiler.exps.InvocationExprent;
 import org.jetbrains.java.decompiler.modules.decompiler.exps.SwitchExprent;
+import org.jetbrains.java.decompiler.modules.decompiler.vars.StartEndPair;
+import org.jetbrains.java.decompiler.struct.StructClass;
 import org.jetbrains.java.decompiler.struct.gen.VarType;
 
 import java.util.*;
@@ -75,7 +80,15 @@ public class SwitchStatement extends Statement {
 
     default_edge = head.getSuccessorEdges(Statement.STATEDGE_DIRECT_ALL).get(0);
 
-    for (Statement st : lstNodes) {
+    // We need to use set above in case we have multiple edges to the same node. But HashSets iterator is not ordered, so sort
+    List<Statement> sorted = new ArrayList<>(lstNodes);
+    Collections.sort(sorted, new Comparator<Statement>() {
+      @Override
+      public int compare(Statement o1, Statement o2) {
+        return o1.id - o2.id;
+      }
+    });
+    for (Statement st : sorted) {
       stats.addWithKey(st, st.id);
     }
   }
@@ -113,11 +126,16 @@ public class SwitchStatement extends Statement {
     buf.append(first.toJava(indent, tracer));
 
     if (isLabeled()) {
-      buf.appendIndent(indent).append("label").append(this.id.toString()).append(":").appendLineSeparator();
+      buf.appendIndent(indent).append("label").append(this.getStartEndRange().start).append(":").appendLineSeparator();
       tracer.incrementCurrentSourceLine();
     }
 
-    buf.appendIndent(indent).append(headexprent.get(0).toJava(indent, tracer)).append(" {").appendLineSeparator();
+    //Doesn't seem to be a better place to put it so enhance things here
+    Map<Integer, String> remaps = enhanceHead(headexprent.get(0), buf, indent, tracer);
+
+    if (remaps == null) {
+      buf.appendIndent(indent).append(headexprent.get(0).toJava(indent, tracer)).append(" {").appendLineSeparator();
+    }
     tracer.incrementCurrentSourceLine();
 
     VarType switch_type = headexprent.get(0).getExprType();
@@ -137,7 +155,14 @@ public class SwitchStatement extends Statement {
           ConstExprent value = (ConstExprent)values.get(j).copy();
           value.setConstType(switch_type);
 
-          buf.appendIndent(indent).append("case ").append(value.toJava(indent, tracer)).append(":").appendLineSeparator();
+          buf.appendIndent(indent).append("case ");
+          if (remaps == null) {
+            buf.append(value.toJava(indent, tracer));
+          }
+          else {
+            buf.append(remaps.get(value.getValue()));
+          }
+          buf.append(":").appendLineSeparator();
           tracer.incrementCurrentSourceLine();
         }
       }
@@ -149,6 +174,41 @@ public class SwitchStatement extends Statement {
     tracer.incrementCurrentSourceLine();
 
     return buf;
+  }
+
+  private Map<Integer, String> enhanceHead(Exprent exprent, TextBuffer buf, int indent, BytecodeMappingTracer tracer) {
+
+    if (exprent.type != Exprent.EXPRENT_SWITCH) return null;
+
+    SwitchExprent swtch = (SwitchExprent)exprent;
+    if (swtch.getValue().type != Exprent.EXPRENT_ARRAY) return null;
+
+    ArrayExprent array = (ArrayExprent)swtch.getValue();
+    if (array.getArray().type != Exprent.EXPRENT_FIELD || array.getIndex().type != Exprent.EXPRENT_INVOCATION) return null;
+
+    FieldExprent field = (FieldExprent)array.getArray();
+    InvocationExprent invoc = (InvocationExprent)array.getIndex();
+    StructClass cls = DecompilerContext.getStructContext().getClass(field.getClassname());
+    if (cls == null || !field.isStatic() || !"ordinal".equals(invoc.getName()) || !"()I".equals(invoc.getStringDescriptor())) return null;
+
+    Map<Integer, String> ret = cls.enumSwitchMap.get(field.getName());
+    if (ret == null) return null;
+
+    for (List<ConstExprent> lst : getCaseValues()) {
+      if (lst != null) {
+        for (ConstExprent cst : lst) {
+          if (cst != null && (!(cst.getValue() instanceof Integer) || !ret.containsKey(cst.getValue()))) {
+            return null;
+          }
+        }
+      }
+    }
+
+    tracer.addMapping(swtch.bytecode);
+    tracer.addMapping(field.bytecode);
+    tracer.addMapping(invoc.bytecode);
+    buf.appendIndent(indent).append((invoc.getInstance().toJava(indent, tracer).enclose("switch (", ")"))).append(" {").appendLineSeparator();
+    return ret;
   }
 
   public void initExprents() {
@@ -364,5 +424,16 @@ public class SwitchStatement extends Statement {
 
   public List<List<ConstExprent>> getCaseValues() {
     return caseValues;
+  }
+
+  @Override
+  public StartEndPair getStartEndRange() {
+    StartEndPair[] sepairs = new StartEndPair[caseStatements.size() + 1];
+    int i = 0;
+    sepairs[i++] = super.getStartEndRange();
+    for (Statement st : caseStatements) {
+      sepairs[i++] = st.getStartEndRange();
+    }
+    return StartEndPair.join(sepairs);
   }
 }

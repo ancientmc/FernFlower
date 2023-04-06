@@ -119,10 +119,13 @@ public class LambdaProcessor {
             }
           }
         }
+        Collections.sort(node.nested);
       }
 
       mt.releaseResources();
     }
+
+    Collections.sort(node.nested);
 
     // build class hierarchy on lambda
     for (ClassNode nd : node.nested) {
@@ -133,6 +136,7 @@ public class LambdaProcessor {
 
           parent_class.nested.add(nd);
           nd.parent = parent_class;
+          Collections.sort(parent_class.nested);
         }
       }
     }

@@ -120,7 +120,7 @@ public class CatchAllStatement extends Statement {
 
     boolean labeled = isLabeled();
     if (labeled) {
-      buf.appendIndent(indent).append("label").append(this.id.toString()).append(":").appendLineSeparator();
+      buf.appendIndent(indent).append("label").append(this.getStartEndRange().start).append(":").appendLineSeparator();
       tracer.incrementCurrentSourceLine();
     }
 
@@ -144,7 +144,7 @@ public class CatchAllStatement extends Statement {
     tracer.incrementCurrentSourceLine();
 
     if (monitor != null) {
-      buf.appendIndent(indent+1).append("if(").append(monitor.toJava(indent, tracer)).append(") {").appendLineSeparator();
+      buf.appendIndent(indent+1).append("if (").append(monitor.toJava(indent, tracer)).append(") {").appendLineSeparator();
       tracer.incrementCurrentSourceLine();
     }
 

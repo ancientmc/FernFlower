@@ -48,15 +48,15 @@ public class ConstExprent extends Exprent {
   private final Object value;
   private final boolean boolPermitted;
 
-  public ConstExprent(int val, boolean boolPermitted, Set<Integer> bytecodeOffsets) {
+  public ConstExprent(int val, boolean boolPermitted, BitSet bytecodeOffsets) {
     this(guessType(val, boolPermitted), new Integer(val), boolPermitted, bytecodeOffsets);
   }
 
-  public ConstExprent(VarType constType, Object value, Set<Integer> bytecodeOffsets) {
+  public ConstExprent(VarType constType, Object value, BitSet bytecodeOffsets) {
     this(constType, value, false, bytecodeOffsets);
   }
 
-  private ConstExprent(VarType constType, Object value, boolean boolPermitted, Set<Integer> bytecodeOffsets) {
+  private ConstExprent(VarType constType, Object value, boolean boolPermitted, BitSet bytecodeOffsets) {
     super(EXPRENT_CONST);
     this.constType = constType;
     this.value = value;
@@ -182,16 +182,16 @@ public class ConstExprent extends Exprent {
           String doublefield;
           if (literal) {
             if (Double.isNaN(dval)) {
-              return new TextBuffer("0.0D / 0.0");
+              return new TextBuffer("0.0D / 0.0D");
             }
             else if (dval == Double.POSITIVE_INFINITY) {
-              return new TextBuffer("1.0D / 0.0");
+              return new TextBuffer("1.0D / 0.0D");
             }
             else if (dval == Double.NEGATIVE_INFINITY) {
-              return new TextBuffer("-1.0D / 0.0");
+              return new TextBuffer("-1.0D / 0.0D");
             }
             else {
-              return new TextBuffer(value.toString()).append("D");
+              return new TextBuffer(trimZeros(value.toString())).append("D");
             }
           }
           else if (Double.isNaN(dval)) {
@@ -210,7 +210,7 @@ public class ConstExprent extends Exprent {
             doublefield = "MIN_VALUE";
           }
           else {
-            return new TextBuffer(value.toString()).append("D");
+            return new TextBuffer(trimZeros(value.toString())).append("D");
           }
           return new FieldExprent(doublefield, "java/lang/Double", true, null, FieldDescriptor.DOUBLE_DESCRIPTOR, bytecode).toJava(0, tracer);
         case CodeConstants.TYPE_FLOAT:
@@ -219,16 +219,16 @@ public class ConstExprent extends Exprent {
           String floatfield;
           if (literal) {
             if (Double.isNaN(fval)) {
-              return new TextBuffer("0.0F / 0.0");
+              return new TextBuffer("0.0F / 0.0F");
             }
             else if (fval == Double.POSITIVE_INFINITY) {
-              return new TextBuffer("1.0F / 0.0");
+              return new TextBuffer("1.0F / 0.0F");
             }
             else if (fval == Double.NEGATIVE_INFINITY) {
-              return new TextBuffer("-1.0F / 0.0");
+              return new TextBuffer("-1.0F / 0.0F");
             }
             else {
-              return new TextBuffer(value.toString()).append("F");
+              return new TextBuffer(trimZeros(value.toString())).append("F");
             }
           }
           else if (Float.isNaN(fval)) {
@@ -247,7 +247,7 @@ public class ConstExprent extends Exprent {
             floatfield = "MIN_VALUE";
           }
           else {
-            return new TextBuffer(value.toString()).append("F");
+            return new TextBuffer(trimZeros(value.toString())).append("F");
           }
           return new FieldExprent(floatfield, "java/lang/Float", true, null, FieldDescriptor.FLOAT_DESCRIPTOR, bytecode).toJava(0, tracer);
         case CodeConstants.TYPE_NULL:
@@ -273,6 +273,16 @@ public class ConstExprent extends Exprent {
     }
 
     throw new RuntimeException("invalid constant type");
+  }
+
+  private static String trimZeros(String value) {
+      int i = value.length() - 1;
+      while (i >= 0 && value.charAt(i) == '0') {
+          i--;
+      }
+      if (value.charAt(i) == '.')
+        i++;
+      return value.substring(0, i + 1);
   }
 
   private static String convertStringToJava(String value, boolean ascii) {
@@ -400,20 +410,30 @@ public class ConstExprent extends Exprent {
   public boolean isBoolPermitted() {
     return boolPermitted;
   }
-  
+
+  @Override
+  public void getBytecodeRange(BitSet values) {
+    measureBytecode(values);
+  }
+
+  @Override
+  public String toString() {
+    return "const(" + toJava(0, new BytecodeMappingTracer()) + ")";
+  }
+
   // *****************************************************************************
   // IMatchable implementation
   // *****************************************************************************
-  
+
   public boolean match(MatchNode matchNode, MatchEngine engine) {
 
     if(!super.match(matchNode, engine)) {
       return false;
     }
-    
+
     for(Entry<MatchProperties, RuleValue> rule : matchNode.getRules().entrySet()) {
       RuleValue rule_value = rule.getValue();
-      
+
       switch(rule.getKey()) {
       case EXPRENT_CONSTTYPE:
         if(!rule_value.value.equals(this.constType)) {
@@ -425,12 +445,12 @@ public class ConstExprent extends Exprent {
           if(!engine.checkAndSetVariableValue(rule_value.value.toString(), this.value)) {
             return false;
           }
-        } 
+        }
         break;
       }
     }
-    
+
     return true;
   }
-  
+
 }

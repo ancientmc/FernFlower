@@ -45,6 +45,7 @@ public interface IFernflowerPreferences {
   String LAMBDA_TO_ANONYMOUS_CLASS = "lac";
   String BYTECODE_SOURCE_MAPPING = "bsm";
   String USE_DEBUG_LINE_NUMBERS = "udl";
+  String IGNORE_INVALID_BYTECODE = "iib";
 
   String LOG_LEVEL = "log";
   String MAX_PROCESSING_METHOD = "mpm";
@@ -59,6 +60,12 @@ public interface IFernflowerPreferences {
 
   String LINE_SEPARATOR_WIN = "\r\n";
   String LINE_SEPARATOR_LIN = "\n";
+
+  String INCLUDE_ENTIRE_CLASSPATH = "iec";
+
+  String USE_JAD_VARNAMING = "jvn";
+
+  String SKIP_EXTRA_FILES = "sef";
 
   Map<String, Object> DEFAULTS = Collections.unmodifiableMap(new HashMap<String, Object>() {{
     put(REMOVE_BRIDGE, "1");
@@ -84,6 +91,7 @@ public interface IFernflowerPreferences {
     put(LAMBDA_TO_ANONYMOUS_CLASS, "0");
     put(BYTECODE_SOURCE_MAPPING, "0");
     put(USE_DEBUG_LINE_NUMBERS, "0");
+    put(IGNORE_INVALID_BYTECODE, "0");
 
     put(LOG_LEVEL, IFernflowerLogger.Severity.INFO.name());
     put(MAX_PROCESSING_METHOD, "0");
@@ -93,5 +101,8 @@ public interface IFernflowerPreferences {
     put(BANNER, "");
     put(UNIT_TEST_MODE, "0");
     put(DUMP_ORIGINAL_LINES, "0");
+    put(INCLUDE_ENTIRE_CLASSPATH, "0");
+    put(USE_JAD_VARNAMING, "0");
+    put(SKIP_EXTRA_FILES, "0");
   }});
 }

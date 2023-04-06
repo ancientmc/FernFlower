@@ -38,6 +38,8 @@ import org.jetbrains.java.decompiler.struct.consts.PooledConstant;
 import org.jetbrains.java.decompiler.struct.consts.PrimitiveConstant;
 import org.jetbrains.java.decompiler.struct.gen.MethodDescriptor;
 import org.jetbrains.java.decompiler.struct.gen.VarType;
+import org.jetbrains.java.decompiler.struct.gen.generics.GenericMain;
+import org.jetbrains.java.decompiler.struct.gen.generics.GenericType;
 
 import java.util.*;
 
@@ -336,7 +338,11 @@ public class ExprProcessor implements CodeConstants {
 
       Instruction instr = seq.getInstr(i);
       Integer bytecode_offset = block.getOldOffset(i);
-      Set<Integer> bytecode_offsets = bytecode_offset >= 0 ? Collections.singleton(bytecode_offset) : null;
+      BitSet bytecode_offsets = null;
+      if (bytecode_offset >= 0) {
+        bytecode_offsets = new BitSet();
+        bytecode_offsets.set(bytecode_offset);
+      }
 
       switch (instr.opcode) {
         case opc_aconst_null:
@@ -376,7 +382,9 @@ public class ExprProcessor implements CodeConstants {
         case opc_fload:
         case opc_dload:
         case opc_aload:
-          pushEx(stack, exprlist, new VarExprent(instr.getOperand(0), vartypes[instr.opcode - opc_iload], varProcessor));
+          VarExprent varExprent = new VarExprent(instr.getOperand(0), vartypes[instr.opcode - opc_iload], varProcessor);
+          varProcessor.findLVT(varExprent, bytecode_offset+instr.length());
+          pushEx(stack, exprlist, varExprent);
           break;
         case opc_iaload:
         case opc_laload:
@@ -406,8 +414,9 @@ public class ExprProcessor implements CodeConstants {
         case opc_astore:
           Exprent top = stack.pop();
           int varindex = instr.getOperand(0);
-          AssignmentExprent assign =
-            new AssignmentExprent(new VarExprent(varindex, vartypes[instr.opcode - opc_istore], varProcessor), top, bytecode_offsets);
+          varExprent = new VarExprent(varindex, vartypes[instr.opcode - opc_istore], varProcessor);
+          varProcessor.findLVT(varExprent, bytecode_offset+instr.length());
+          AssignmentExprent assign = new AssignmentExprent(varExprent, top, bytecode_offsets);
           exprlist.add(assign);
           break;
         case opc_iastore:
@@ -469,6 +478,7 @@ public class ExprProcessor implements CodeConstants {
           break;
         case opc_iinc:
           VarExprent vevar = new VarExprent(instr.getOperand(0), VarType.VARTYPE_INT, varProcessor);
+          varProcessor.findLVT(vevar,bytecode_offset+instr.length());
           exprlist.add(new AssignmentExprent(vevar, new FunctionExprent(
             instr.getOperand(1) < 0 ? FunctionExprent.FUNCTION_SUB : FunctionExprent.FUNCTION_ADD, Arrays
             .asList(vevar.copy(), new ConstExprent(VarType.VARTYPE_INT, Math.abs(instr.getOperand(1)), null)),
@@ -720,7 +730,14 @@ public class ExprProcessor implements CodeConstants {
     else if (tp == CodeConstants.TYPE_VOID) {
       return "void";
     }
+    else if (tp == CodeConstants.TYPE_GENVAR && type.isGeneric()) {
+        return type.value;
+    }
     else if (tp == CodeConstants.TYPE_OBJECT) {
+      if (type.isGeneric()) {
+        return ((GenericType)type).getCastName();
+      }
+
       String ret = buildJavaClassName(type.value);
       if (getShort) {
         ret = DecompilerContext.getImportCollector().getShortName(ret);
@@ -798,7 +815,7 @@ public class ExprProcessor implements CodeConstants {
         }
 
         if (edge.labeled) {
-          buf.append(" label").append(edge.closure.id.toString());
+          buf.append(" label").append(edge.closure.getStartEndRange().start);
         }
         buf.append(";").appendLineSeparator();
         tracer.incrementCurrentSourceLine();
@@ -833,8 +850,10 @@ public class ExprProcessor implements CodeConstants {
     }
 
     TextBuffer buf = new TextBuffer();
+    lst = Exprent.sortIndexed(lst);
 
     for (Exprent expr : lst) {
+      expr.getInferredExprType(null);
       TextBuffer content = expr.toJava(indent, tracer);
       if (content.length() > 0) {
         if (expr.type != Exprent.EXPRENT_VAR || !((VarExprent)expr).isClassDef()) {
@@ -894,7 +913,7 @@ public class ExprProcessor implements CodeConstants {
                                          boolean castAlways,
                                          BytecodeMappingTracer tracer) {
 
-    VarType rightType = exprent.getExprType();
+    VarType rightType = exprent.getInferredExprType(leftType);
 
     TextBuffer res = exprent.toJava(indent, tracer);
 
@@ -906,10 +925,10 @@ public class ExprProcessor implements CodeConstants {
 
     if (cast) {
       if (exprent.getPrecedence() >= FunctionExprent.getPrecedence(FunctionExprent.FUNCTION_CAST)) {
-        res.enclose("(", ")");
+        res.enclose("(", ") ");
       }
 
-      res.prepend("(" + getCastTypeName(leftType) + ")");
+      res.prepend("(" + getCastTypeName(leftType) + ") ");
     }
 
     buffer.append(res);

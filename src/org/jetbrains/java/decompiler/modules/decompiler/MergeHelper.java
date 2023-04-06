@@ -92,9 +92,9 @@ public class MergeHelper {
         StatEdge elseedge = lastif.getAllSuccessorEdges().get(0);
 
         if ((ifedge.getType() == StatEdge.TYPE_BREAK && elseedge.getType() == StatEdge.TYPE_CONTINUE && elseedge.closure == stat
-             && isDirectPath(stat, ifedge.getDestination())) ||
-            (ifedge.getType() == StatEdge.TYPE_CONTINUE && elseedge.getType() == StatEdge.TYPE_BREAK && ifedge.closure == stat
-             && isDirectPath(stat, elseedge.getDestination()))) {
+                && isDirectPath(stat, ifedge.getDestination())) ||
+                (ifedge.getType() == StatEdge.TYPE_CONTINUE && elseedge.getType() == StatEdge.TYPE_BREAK && ifedge.closure == stat
+                        && isDirectPath(stat, elseedge.getDestination()))) {
 
           Set<Statement> set = stat.getNeighboursSet(StatEdge.TYPE_CONTINUE, Statement.DIRECTION_BACKWARD);
           set.remove(last);
@@ -184,7 +184,7 @@ public class MergeHelper {
               // remove empty if statement as it is now part of the loop
               if (firstif == stat.getFirst()) {
                 BasicBlockStatement bstat = new BasicBlockStatement(new BasicBlock(
-                  DecompilerContext.getCounterContainer().getCounterAndIncrement(CounterContainer.STATEMENT_COUNTER)));
+                        DecompilerContext.getCounterContainer().getCounterAndIncrement(CounterContainer.STATEMENT_COUNTER)));
                 bstat.setExprents(new ArrayList<Exprent>());
                 stat.replaceStatement(firstif, bstat);
               }
@@ -223,7 +223,7 @@ public class MergeHelper {
 
               if (firstif.getIfstat() == null) {
                 BasicBlockStatement bstat = new BasicBlockStatement(new BasicBlock(
-                  DecompilerContext.getCounterContainer().getCounterAndIncrement(CounterContainer.STATEMENT_COUNTER)));
+                        DecompilerContext.getCounterContainer().getCounterAndIncrement(CounterContainer.STATEMENT_COUNTER)));
                 bstat.setExprents(new ArrayList<Exprent>());
 
                 ifedge.setSource(bstat);
@@ -313,7 +313,7 @@ public class MergeHelper {
     }
 
     boolean haslast = issingle || (lastDoExprent.type == Exprent.EXPRENT_ASSIGNMENT ||
-                                   lastDoExprent.type == Exprent.EXPRENT_FUNCTION);
+            lastDoExprent.type == Exprent.EXPRENT_FUNCTION);
 
     if (!haslast) {
       return false;
@@ -381,7 +381,7 @@ public class MergeHelper {
 
     if (stat == dostat.getFirst()) {
       BasicBlockStatement bstat = new BasicBlockStatement(new BasicBlock(
-        DecompilerContext.getCounterContainer().getCounterAndIncrement(CounterContainer.STATEMENT_COUNTER)));
+              DecompilerContext.getCounterContainer().getCounterAndIncrement(CounterContainer.STATEMENT_COUNTER)));
       bstat.setExprents(new ArrayList<Exprent>());
       dostat.replaceStatement(stat, bstat);
     }

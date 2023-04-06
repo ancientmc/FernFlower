@@ -20,9 +20,12 @@ import org.jetbrains.java.decompiler.code.cfg.ControlFlowGraph;
 import org.jetbrains.java.decompiler.code.cfg.ExceptionRangeCFG;
 import org.jetbrains.java.decompiler.main.DecompilerContext;
 import org.jetbrains.java.decompiler.main.extern.IFernflowerLogger;
+import org.jetbrains.java.decompiler.main.rels.MethodProcessorRunnable;
 import org.jetbrains.java.decompiler.modules.decompiler.decompose.FastExtendedPostdominanceHelper;
 import org.jetbrains.java.decompiler.modules.decompiler.deobfuscator.IrreducibleCFGDeobfuscator;
 import org.jetbrains.java.decompiler.modules.decompiler.stats.*;
+import org.jetbrains.java.decompiler.struct.StructMethod;
+import org.jetbrains.java.decompiler.util.DotExporter;
 import org.jetbrains.java.decompiler.util.FastFixedSetFactory;
 import org.jetbrains.java.decompiler.util.FastFixedSetFactory.FastFixedSet;
 import org.jetbrains.java.decompiler.util.InterpreterUtil;
@@ -207,21 +210,16 @@ public class DomHelper {
     return ret;
   }
 
-  public static RootStatement parseGraph(ControlFlowGraph graph) {
+  public static RootStatement parseGraph(ControlFlowGraph graph, StructMethod mt) {
 
     RootStatement root = graphToStatement(graph);
 
-    if (!processStatement(root, new HashMap<Integer, Set<Integer>>())) {
-
-      //			try {
-      //				DotExporter.toDotFile(root.getFirst().getStats().get(13), new File("c:\\Temp\\stat1.dot"));
-      //			} catch (Exception ex) {
-      //				ex.printStackTrace();
-      //			}
+    if (!processStatement(root, new LinkedHashMap<Integer, LinkedHashSet<Integer>>())) {
+      DotExporter.toDotFile(graph, mt, "parseGraphFail", true);
       throw new RuntimeException("parsing failure!");
     }
 
-    LabelHelper.lowContinueLabels(root, new HashSet<StatEdge>());
+    LabelHelper.lowContinueLabels(root, new LinkedHashSet<StatEdge>());
 
     SequenceHelper.condenseSequences(root);
     root.buildMonitorFlags();
@@ -312,7 +310,7 @@ public class DomHelper {
     }
   }
 
-  private static boolean processStatement(Statement general, HashMap<Integer, Set<Integer>> mapExtPost) {
+  private static boolean processStatement(Statement general, HashMap<Integer, LinkedHashSet<Integer>> mapExtPost) {
 
     if (general.type == Statement.TYPE_ROOT) {
       Statement stat = general.getFirst();
@@ -361,7 +359,7 @@ public class DomHelper {
           //						DotExporter.toDotFile(general, new File("c:\\Temp\\stat1.dot"));
           //					} catch(Exception ex) {ex.printStackTrace();}
 
-          mapExtPost = new HashMap<Integer, Set<Integer>>();
+          mapExtPost = new HashMap<Integer, LinkedHashSet<Integer>>();
           mapRefreshed = true;
         }
 
@@ -382,7 +380,7 @@ public class DomHelper {
             Statement stat = findGeneralStatement(general, forceall, mapExtPost);
 
             if (stat != null) {
-              boolean complete = processStatement(stat, general.getFirst() == stat ? mapExtPost : new HashMap<Integer, Set<Integer>>());
+              boolean complete = processStatement(stat, general.getFirst() == stat ? mapExtPost : new HashMap<Integer, LinkedHashSet<Integer>>());
 
               if (complete) {
                 // replace general purpose statement with simple one
@@ -392,7 +390,7 @@ public class DomHelper {
                 return false;
               }
 
-              mapExtPost = new HashMap<Integer, Set<Integer>>();
+              mapExtPost = new HashMap<Integer, LinkedHashSet<Integer>>();
               mapRefreshed = true;
               reducibility = 0;
             }
@@ -413,14 +411,14 @@ public class DomHelper {
         break;
       }
       else {
-        mapExtPost = new HashMap<Integer, Set<Integer>>();
+        mapExtPost = new HashMap<Integer, LinkedHashSet<Integer>>();
       }
     }
 
     return false;
   }
 
-  private static Statement findGeneralStatement(Statement stat, boolean forceall, HashMap<Integer, Set<Integer>> mapExtPost) {
+  private static Statement findGeneralStatement(Statement stat, boolean forceall, HashMap<Integer, LinkedHashSet<Integer>> mapExtPost) {
 
     VBStyleCollection<Statement, Integer> stats = stat.getStats();
     VBStyleCollection<List<Integer>, Integer> vbPost;
@@ -486,11 +484,11 @@ public class DomHelper {
 
         boolean same = (post == head);
 
-        HashSet<Statement> setNodes = new HashSet<Statement>();
+        LinkedHashSet<Statement> setNodes = new LinkedHashSet<Statement>();
         HashSet<Statement> setPreds = new HashSet<Statement>();
 
         // collect statement nodes
-        HashSet<Statement> setHandlers = new HashSet<Statement>();
+        HashSet<Statement> setHandlers = new LinkedHashSet<Statement>();
         setHandlers.add(head);
         while (true) {
 
@@ -598,7 +596,7 @@ public class DomHelper {
     return true;
   }
 
-  private static boolean findSimpleStatements(Statement stat, HashMap<Integer, Set<Integer>> mapExtPost) {
+  private static boolean findSimpleStatements(Statement stat, HashMap<Integer, LinkedHashSet<Integer>> mapExtPost) {
 
     boolean found, success = false;
 
@@ -636,9 +634,9 @@ public class DomHelper {
               set.removeAll(setOldNodes);
 
               if (setOldNodes.contains(key)) {
-                Set<Integer> setNew = mapExtPost.get(newid);
+                LinkedHashSet<Integer> setNew = mapExtPost.get(newid);
                 if (setNew == null) {
-                  mapExtPost.put(newid, setNew = new HashSet<Integer>());
+                  mapExtPost.put(newid, setNew = new LinkedHashSet<Integer>());
                 }
                 setNew.addAll(set);
 
@@ -669,7 +667,6 @@ public class DomHelper {
 
 
   private static Statement detectStatement(Statement head) {
-
     Statement res;
 
     if ((res = DoStatement.isHead(head)) != null) {
