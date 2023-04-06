@@ -2,7 +2,9 @@ apply plugin: 'java'
 apply plugin: 'maven-publish'
 apply plugin: 'eclipse'
 
-archivesBaseName = 'forgeflower'
+archivesBaseName = 'fernflower'
+group = 'com.ancientmc'
+version = '1.0'
 ext {
     CHANGELOG = rootProject.file('build/changelog.txt')
 }
@@ -19,7 +21,6 @@ repositories {
 }
 
 dependencies {
-
     testImplementation 'junit:junit:4.+'
     testImplementation 'org.hamcrest:hamcrest-core:1.3'
     testImplementation 'org.assertj:assertj-core:3.+'

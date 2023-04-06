@@ -148,14 +148,14 @@ public class SwitchStatement extends Statement {
 
       for (int j = 0; j < edges.size(); j++) {
         if (edges.get(j) == default_edge) {
-          buf.appendIndent(indent).append("default:").appendLineSeparator();
+          buf.appendIndent(indent + 1).append("default:").appendLineSeparator();
           tracer.incrementCurrentSourceLine();
         }
         else {
           ConstExprent value = (ConstExprent)values.get(j).copy();
           value.setConstType(switch_type);
 
-          buf.appendIndent(indent).append("case ");
+          buf.appendIndent(indent + 1).append("case ");
           if (remaps == null) {
             buf.append(value.toJava(indent, tracer));
           }
@@ -167,7 +167,7 @@ public class SwitchStatement extends Statement {
         }
       }
 
-      buf.append(ExprProcessor.jmpWrapper(stat, indent + 1, false, tracer));
+      buf.append(ExprProcessor.jmpWrapper(stat, indent + 2, false, tracer));
     }
 
     buf.appendIndent(indent).append("}").appendLineSeparator();
