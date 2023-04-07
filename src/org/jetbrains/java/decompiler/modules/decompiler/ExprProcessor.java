@@ -925,7 +925,7 @@ public class ExprProcessor implements CodeConstants {
 
     if (cast) {
       if (exprent.getPrecedence() >= FunctionExprent.getPrecedence(FunctionExprent.FUNCTION_CAST)) {
-        res.enclose("(", ") ");
+        res.enclose("(", ")");
       }
 
       res.prepend("(" + getCastTypeName(leftType) + ") ");
